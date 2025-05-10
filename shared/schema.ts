@@ -27,8 +27,8 @@ export const commands = pgTable("commands", {
 export const commandHistory = pgTable("command_history", {
   id: serial("id").primaryKey(),
   command: text("command").notNull(),
-  output: text("output"),
-  exitCode: integer("exit_code"),
+  output: text("output").notNull().default(""),
+  exitCode: integer("exit_code").notNull().default(0),
   timestamp: timestamp("timestamp").defaultNow(),
   projectId: integer("project_id").notNull(),
 });
@@ -38,10 +38,10 @@ export const transactionRequests = pgTable("transaction_requests", {
   type: text("type").notNull(),
   status: text("status").notNull(),
   details: text("details").notNull(),
-  gasLimit: text("gas_limit"),
-  gasPrice: text("gas_price"),
+  gasLimit: text("gas_limit").notNull().default(""),
+  gasPrice: text("gas_price").notNull().default(""),
   network: text("network").notNull(),
-  contractName: text("contract_name"),
+  contractName: text("contract_name").notNull().default(""),
   timestamp: timestamp("timestamp").defaultNow(),
   projectId: integer("project_id").notNull(),
 });
