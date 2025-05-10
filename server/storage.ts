@@ -15,6 +15,8 @@ import {
   type TransactionRequest,
   type InsertTransactionRequest
 } from "@shared/schema";
+import { db } from "./db";
+import { eq, desc } from "drizzle-orm";
 
 export interface IStorage {
   // User methods
@@ -41,223 +43,82 @@ export interface IStorage {
   updateTransactionStatus(id: number, status: string): Promise<TransactionRequest>;
 }
 
-export class MemStorage implements IStorage {
-  private users: Map<number, User>;
-  private projects: Map<number, Project>;
-  private commands: Map<number, Command>;
-  private commandHistories: Map<number, CommandHistory>;
-  private transactionRequests: Map<number, TransactionRequest>;
-  
-  private userId: number;
-  private projectId: number;
-  private commandId: number;
-  private commandHistoryId: number;
-  private transactionRequestId: number;
-
-  constructor() {
-    this.users = new Map();
-    this.projects = new Map();
-    this.commands = new Map();
-    this.commandHistories = new Map();
-    this.transactionRequests = new Map();
-    
-    this.userId = 1;
-    this.projectId = 1;
-    this.commandId = 1;
-    this.commandHistoryId = 1;
-    this.transactionRequestId = 1;
-    
-    // Add sample data
-    this.initSampleData();
-  }
-  
-  private initSampleData() {
-    // Create a sample user
-    const user: User = { 
-      id: this.userId++, 
-      username: 'developer', 
-      password: 'password123' 
-    };
-    this.users.set(user.id, user);
-    
-    // Create sample projects
-    const ethereumDapp: Project = {
-      id: this.projectId++,
-      name: 'Ethereum DApp',
-      path: '/projects/ethereum-dapp',
-      framework: 'Hardhat',
-      lastBuild: new Date(Date.now() - 24 * 60 * 60 * 1000),
-      userId: user.id
-    };
-    
-    const defiProtocol: Project = {
-      id: this.projectId++,
-      name: 'DeFi Lending Protocol',
-      path: '/projects/defi-lending',
-      framework: 'Foundry',
-      lastBuild: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000),
-      userId: user.id
-    };
-    
-    const nftMarketplace: Project = {
-      id: this.projectId++,
-      name: 'NFT Marketplace',
-      path: '/projects/nft-marketplace',
-      framework: 'Truffle',
-      lastBuild: null,
-      userId: user.id
-    };
-    
-    const crossChainBridge: Project = {
-      id: this.projectId++,
-      name: 'Cross-Chain Bridge',
-      path: '/projects/cross-chain',
-      framework: 'Hardhat',
-      lastBuild: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000),
-      userId: user.id
-    };
-    
-    this.projects.set(ethereumDapp.id, ethereumDapp);
-    this.projects.set(defiProtocol.id, defiProtocol);
-    this.projects.set(nftMarketplace.id, nftMarketplace);
-    this.projects.set(crossChainBridge.id, crossChainBridge);
-    
-    // Create sample commands for each project
-    [ethereumDapp, defiProtocol, nftMarketplace, crossChainBridge].forEach(project => {
-      // Standard commands
-      const buildCommand: Command = {
-        id: this.commandId++,
-        command: 'mm-snap build',
-        description: 'Build the project',
-        projectId: project.id
-      };
-      
-      const testCommand: Command = {
-        id: this.commandId++,
-        command: 'mm-snap test',
-        description: 'Run the test suite',
-        projectId: project.id
-      };
-      
-      const deployTestnetCommand: Command = {
-        id: this.commandId++,
-        command: 'mm-snap deploy --network testnet',
-        description: 'Deploy to testnet',
-        projectId: project.id
-      };
-      
-      const deployMainnetCommand: Command = {
-        id: this.commandId++,
-        command: 'mm-snap deploy --network mainnet',
-        description: 'Deploy to mainnet',
-        projectId: project.id
-      };
-      
-      this.commands.set(buildCommand.id, buildCommand);
-      this.commands.set(testCommand.id, testCommand);
-      this.commands.set(deployTestnetCommand.id, deployTestnetCommand);
-      this.commands.set(deployMainnetCommand.id, deployMainnetCommand);
-    });
-  }
-
+export class DatabaseStorage implements IStorage {
   // User methods
   async getUser(id: number): Promise<User | undefined> {
-    return this.users.get(id);
+    const result = await db.select().from(users).where(eq(users.id, id));
+    return result[0];
   }
 
   async getUserByUsername(username: string): Promise<User | undefined> {
-    return Array.from(this.users.values()).find(
-      (user) => user.username === username,
-    );
+    const result = await db.select().from(users).where(eq(users.username, username));
+    return result[0];
   }
 
   async createUser(insertUser: InsertUser): Promise<User> {
-    const id = this.userId++;
-    const user: User = { ...insertUser, id };
-    this.users.set(id, user);
-    return user;
+    const result = await db.insert(users).values(insertUser).returning();
+    return result[0];
   }
   
   // Project methods
   async getAllProjects(): Promise<Project[]> {
-    return Array.from(this.projects.values());
+    return db.select().from(projects);
   }
   
   async getProject(id: number): Promise<Project | undefined> {
-    return this.projects.get(id);
+    const result = await db.select().from(projects).where(eq(projects.id, id));
+    return result[0];
   }
   
   async createProject(project: InsertProject): Promise<Project> {
-    const id = this.projectId++;
-    const newProject: Project = { 
-      ...project, 
-      id,
-      lastBuild: null
-    };
-    this.projects.set(id, newProject);
-    return newProject;
+    const result = await db.insert(projects).values(project).returning();
+    return result[0];
   }
   
   // Command methods
   async getCommandsByProject(projectId: number): Promise<Command[]> {
-    return Array.from(this.commands.values()).filter(cmd => cmd.projectId === projectId);
+    return db.select().from(commands).where(eq(commands.projectId, projectId));
   }
   
   async createCommand(command: InsertCommand): Promise<Command> {
-    const id = this.commandId++;
-    const newCommand: Command = { ...command, id };
-    this.commands.set(id, newCommand);
-    return newCommand;
+    const result = await db.insert(commands).values(command).returning();
+    return result[0];
   }
   
   // Command history methods
   async getCommandHistoryByProject(projectId: number): Promise<CommandHistory[]> {
-    return Array.from(this.commandHistories.values())
-      .filter(history => history.projectId === projectId)
-      .sort((a, b) => {
-        const dateA = a.timestamp ? new Date(a.timestamp).getTime() : 0;
-        const dateB = b.timestamp ? new Date(b.timestamp).getTime() : 0;
-        return dateB - dateA; // Sort by most recent first
-      });
+    return db
+      .select()
+      .from(commandHistory)
+      .where(eq(commandHistory.projectId, projectId))
+      .orderBy(desc(commandHistory.timestamp));
   }
   
   async createCommandHistory(history: InsertCommandHistory): Promise<CommandHistory> {
-    const id = this.commandHistoryId++;
-    const timestamp = new Date();
-    
     // Ensure we have values for all required fields
-    const newHistory: CommandHistory = { 
-      id, 
-      timestamp, 
+    const historyToInsert = {
       command: history.command,
       projectId: history.projectId,
       output: history.output || "",
       exitCode: history.exitCode || 0
     };
     
-    this.commandHistories.set(id, newHistory);
-    return newHistory;
+    const result = await db.insert(commandHistory).values(historyToInsert).returning();
+    return result[0];
   }
   
   // Transaction request methods
   async getPendingTransactionRequests(): Promise<TransactionRequest[]> {
-    return Array.from(this.transactionRequests.values())
-      .filter(tx => tx.status === "pending")
-      .sort((a, b) => {
-        const dateA = a.timestamp ? new Date(a.timestamp).getTime() : 0;
-        const dateB = b.timestamp ? new Date(b.timestamp).getTime() : 0;
-        return dateB - dateA; // Sort by most recent first
-      });
+    return db
+      .select()
+      .from(transactionRequests)
+      .where(eq(transactionRequests.status, "pending"))
+      .orderBy(desc(transactionRequests.timestamp));
   }
   
   async createTransactionRequest(transaction: InsertTransactionRequest): Promise<TransactionRequest> {
-    const id = this.transactionRequestId++;
-    const timestamp = new Date();
-    
     // Ensure we have values for all required fields
-    const newTransaction: TransactionRequest = {
-      id,
-      timestamp,
+    const transactionToInsert = {
       type: transaction.type,
       status: transaction.status,
       details: transaction.details,
@@ -268,20 +129,100 @@ export class MemStorage implements IStorage {
       contractName: transaction.contractName || ""
     };
     
-    this.transactionRequests.set(id, newTransaction);
-    return newTransaction;
+    const result = await db.insert(transactionRequests).values(transactionToInsert).returning();
+    return result[0];
   }
   
   async updateTransactionStatus(id: number, status: string): Promise<TransactionRequest> {
-    const transaction = this.transactionRequests.get(id);
-    if (!transaction) {
+    const result = await db
+      .update(transactionRequests)
+      .set({ status })
+      .where(eq(transactionRequests.id, id))
+      .returning();
+    
+    if (result.length === 0) {
       throw new Error(`Transaction with id ${id} not found`);
     }
     
-    const updatedTransaction: TransactionRequest = { ...transaction, status };
-    this.transactionRequests.set(id, updatedTransaction);
-    return updatedTransaction;
+    return result[0];
+  }
+
+  // Initialize the database with sample data if needed
+  async initSampleData(): Promise<void> {
+    // Check if we have any projects already
+    const existingProjects = await db.select().from(projects);
+    if (existingProjects.length > 0) {
+      return; // Skip initialization if data already exists
+    }
+
+    // Create a sample user
+    const [user] = await db.insert(users).values({
+      username: 'developer',
+      password: 'password123'
+    }).returning();
+
+    // Create sample projects
+    const [ethereumDapp] = await db.insert(projects).values({
+      name: 'Ethereum DApp',
+      path: '/projects/ethereum-dapp',
+      framework: 'Hardhat',
+      lastBuild: new Date(Date.now() - 24 * 60 * 60 * 1000),
+      userId: user.id
+    }).returning();
+    
+    const [defiProtocol] = await db.insert(projects).values({
+      name: 'DeFi Lending Protocol',
+      path: '/projects/defi-lending',
+      framework: 'Foundry',
+      lastBuild: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000),
+      userId: user.id
+    }).returning();
+    
+    const [nftMarketplace] = await db.insert(projects).values({
+      name: 'NFT Marketplace',
+      path: '/projects/nft-marketplace',
+      framework: 'Truffle',
+      lastBuild: null,
+      userId: user.id
+    }).returning();
+    
+    const [crossChainBridge] = await db.insert(projects).values({
+      name: 'Cross-Chain Bridge',
+      path: '/projects/cross-chain',
+      framework: 'Hardhat',
+      lastBuild: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000),
+      userId: user.id
+    }).returning();
+
+    // Create standard commands for each project
+    const projectList = [ethereumDapp, defiProtocol, nftMarketplace, crossChainBridge];
+    
+    for (const project of projectList) {
+      await db.insert(commands).values([
+        {
+          command: 'mm-snap build',
+          description: 'Build the project',
+          projectId: project.id
+        },
+        {
+          command: 'mm-snap test',
+          description: 'Run the test suite',
+          projectId: project.id
+        },
+        {
+          command: 'mm-snap deploy --network testnet',
+          description: 'Deploy to testnet',
+          projectId: project.id
+        },
+        {
+          command: 'mm-snap deploy --network mainnet',
+          description: 'Deploy to mainnet',
+          projectId: project.id
+        }
+      ]);
+    }
   }
 }
 
-export const storage = new MemStorage();
+// Initialize database storage
+export const storage = new DatabaseStorage();
