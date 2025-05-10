@@ -4,8 +4,17 @@ import ProjectSelector from "./ProjectSelector";
 import Terminal from "./Terminal";
 import InfoPanel from "./InfoPanel";
 import TransactionModal from "./TransactionModal";
+import DeFiDashboard from "./DeFiDashboard";
 import { useProject } from "@/hooks/useProject";
 import { useQuery } from "@tanstack/react-query";
+import { queryClient } from "@/lib/queryClient";
+import { TransactionRequest } from "@shared/schema";
+
+// Define interface for pending transactions response
+interface PendingTransactionsResponse {
+  length: number;
+  [index: number]: TransactionRequest;
+}
 
 const DevOpsSnapApp = () => {
   const [showTransactionModal, setShowTransactionModal] = useState(false);
@@ -13,7 +22,7 @@ const DevOpsSnapApp = () => {
   const { selectedProject, setSelectedProject } = useProject();
 
   // Fetch pending transactions
-  const { data: pendingTransaction } = useQuery({
+  const { data: pendingTransaction } = useQuery<PendingTransactionsResponse>({
     queryKey: ["/api/transactions/pending"],
     enabled: !!selectedProject
   });
@@ -55,6 +64,20 @@ const DevOpsSnapApp = () => {
       } catch (error) {
         console.error("Failed to reject transaction:", error);
       }
+    }
+  };
+
+  // Render different content based on active tab
+  const renderMainContent = () => {
+    switch (activeTab) {
+      case "terminal":
+        return <Terminal activeTab={activeTab} />;
+      case "defi":
+        return <DeFiDashboard />;
+      case "cross-chain":
+        return <DeFiDashboard />;
+      default:
+        return <Terminal activeTab={activeTab} />;
     }
   };
 
@@ -116,23 +139,27 @@ const DevOpsSnapApp = () => {
 
         {/* Main Panel */}
         <div className="flex-1 flex flex-col overflow-hidden">
-          {/* Project Selector */}
-          <ProjectSelector 
-            selectedProject={selectedProject} 
-            onProjectChange={setSelectedProject} 
-          />
+          {/* Project Selector - only show in terminal view */}
+          {activeTab === "terminal" && (
+            <ProjectSelector 
+              selectedProject={selectedProject} 
+              onProjectChange={setSelectedProject} 
+            />
+          )}
 
-          {/* Terminal */}
-          <Terminal activeTab={activeTab} />
+          {/* Main content based on active tab */}
+          {renderMainContent()}
         </div>
 
-        {/* Info Panel */}
-        <InfoPanel 
-          pendingTransaction={pendingTransaction?.[0]} 
-          selectedProject={selectedProject}
-          onSignTransaction={handleSignTransaction}
-          onRejectTransaction={handleRejectTransaction}
-        />
+        {/* Info Panel - only show in terminal view */}
+        {activeTab === "terminal" && (
+          <InfoPanel 
+            pendingTransaction={pendingTransaction?.[0]} 
+            selectedProject={selectedProject}
+            onSignTransaction={handleSignTransaction}
+            onRejectTransaction={handleRejectTransaction}
+          />
+        )}
       </div>
 
       {/* Transaction Modal */}
